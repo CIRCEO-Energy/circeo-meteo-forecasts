@@ -1,5 +1,5 @@
 # Historical extraction of FORECAST archives, using the code of boris-circeo/circeo-meteo (main).
-# dataset: gefs_reforecast | gefs_oper | gefs_ctl | gfs_wave | ecmwf_open | ecmwf_hres_wb2
+# dataset: gefs_reforecast | gefs_oper | gefs_ctl | gfs_wave | ecmwf_open | ecmwf_hres_wb2 | cmems_phy_forecast
 # Files go to this repository's Releases (tags from circeo-meteo/config.yaml).
 name: build
 on:
@@ -40,6 +40,9 @@ jobs:
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt
       - name: build
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
         run: python -m meteo.build ${{ inputs.dataset }} --year ${{ matrix.year }} --month ${{ matrix.month }} ${{ inputs.extra }} --out out
       - name: upload
         env: {GH_TOKEN: '${{ github.token }}'}
