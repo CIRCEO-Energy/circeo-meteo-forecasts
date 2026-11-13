@@ -1,0 +1,46 @@
+# Historical extraction of FORECAST archives, using the code of boris-circeo/circeo-meteo (main).
+# dataset: gefs_reforecast | gefs_oper | gefs_ctl | gfs_wave | ecmwf_open | ecmwf_hres_wb2
+# Files go to this repository's Releases (tags from circeo-meteo/config.yaml).
+name: build
+on:
+  workflow_dispatch:
+    inputs:
+      dataset: {description: 'gefs_reforecast | gefs_oper | gefs_ctl | gfs_wave | ecmwf_open | ecmwf_hres_wb2', required: true}
+      years: {description: 'JSON list of years, e.g. [2023,2024]', required: true}
+      months: {description: 'JSON list of months', default: '[1,2,3,4,5,6,7,8,9,10,11,12]'}
+      extra: {description: 'extra CLI args, e.g. "--days 1" or "--products oper aifs"', default: ''}
+      code_ref: {description: 'branch / commit of circeo-meteo to use', default: 'main'}
+permissions:
+  contents: write
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - id: m
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          years = json.loads('${{ inputs.years }}'); months = json.loads('${{ inputs.months }}')
+          print("matrix=" + json.dumps({"include": [{"year": y, "month": m} for y in years for m in months]}))
+          EOF
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: build
+        run: python -m meteo.build ${{ inputs.dataset }} --year ${{ matrix.year }} --month ${{ matrix.month }} ${{ inputs.extra }} --out out
+      - name: upload
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: python -m meteo.publish --repo ${{ github.repository }} out/*

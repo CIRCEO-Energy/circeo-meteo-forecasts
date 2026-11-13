@@ -1,0 +1,37 @@
+# Full-resolution (0.25 deg) verification of the wind ensembles against ERA5, computed on the
+# runner from the native AWS files; only monthly statistics are stored (Release verify-0p25-v1).
+name: verify
+on:
+  workflow_dispatch:
+    inputs:
+      product: {description: 'ecmwf_enfo | gefs_oper', required: true}
+      years: {description: 'JSON list of years', required: true}
+      months: {description: 'JSON list of months', default: '[1,2,3,4,5,6,7,8,9,10,11,12]'}
+      extra: {description: 'extra args, e.g. "--days 1 2"', default: ''}
+permissions:
+  contents: write
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs: {matrix: '${{ steps.m.outputs.matrix }}'}
+    steps:
+      - id: m
+        run: |
+          python3 -c "import json;y=json.loads('${{ inputs.years }}');m=json.loads('${{ inputs.months }}');print('matrix='+json.dumps({'include':[{'year':a,'month':b} for a in y for b in m]}))" >> "$GITHUB_OUTPUT"
+  verify:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy: {fail-fast: false, max-parallel: 8, matrix: '${{ fromJSON(needs.plan.outputs.matrix) }}'}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - run: python -m meteo.verify --product ${{ inputs.product }} --year ${{ matrix.year }} --month ${{ matrix.month }} ${{ inputs.extra }} --out out
+      - name: upload
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          gh release view verify-0p25-v1 -R ${{ github.repository }} >/dev/null 2>&1 || gh release create verify-0p25-v1 -R ${{ github.repository }} --title verify-0p25-v1 --notes "Monthly full-resolution verification statistics of the wind ensembles (see meteo/verify.py in boris-circeo/circeo-meteo)."
+          gh release upload verify-0p25-v1 out/* -R ${{ github.repository }} --clobber
