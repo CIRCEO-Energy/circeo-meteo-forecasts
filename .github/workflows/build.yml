@@ -9,6 +9,8 @@ on:
       years: {description: 'JSON list of years, e.g. [2023,2024]', required: true}
       months: {description: 'JSON list of months', default: '[1,2,3,4,5,6,7,8,9,10,11,12]'}
       extra: {description: 'extra CLI args, e.g. "--days 1" or "--products oper aifs"', default: ''}
+      day_chunks: {description: 'split each month into jobs of N days (daily-file products, e.g. ENS: 10); 0 = whole month', default: '0'}
+      max_parallel: {description: 'max concurrent jobs (ECMWF bucket: <= 6)', default: '16'}
       code_ref: {description: 'branch / commit of circeo-meteo to use', default: 'main'}
 permissions:
   contents: write
@@ -22,8 +24,20 @@ jobs:
         run: |
           python3 - <<'EOF' >> "$GITHUB_OUTPUT"
           import json
+          import calendar
           years = json.loads('${{ inputs.years }}'); months = json.loads('${{ inputs.months }}')
-          print("matrix=" + json.dumps({"include": [{"year": y, "month": m} for y in years for m in months]}))
+          n = int('${{ inputs.day_chunks }}' or 0)
+          inc = []
+          for y in years:
+              for m in months:
+                  if n <= 0:
+                      inc.append({"year": y, "month": m, "days": ""})
+                      continue
+                  last = calendar.monthrange(y, m)[1]
+                  for a in range(1, last + 1, n):
+                      d = list(range(a, min(a + n - 1, last) + 1))
+                      inc.append({"year": y, "month": m, "days": "--days " + " ".join(map(str, d))})
+          print("matrix=" + json.dumps({"include": inc}))
           EOF
   build:
     needs: plan
@@ -31,7 +45,7 @@ jobs:
     timeout-minutes: 350
     strategy:
       fail-fast: false
-      max-parallel: 16
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +57,9 @@ jobs:
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
-        run: python -m meteo.build ${{ inputs.dataset }} --year ${{ matrix.year }} --month ${{ matrix.month }} ${{ inputs.extra }} --out out
+        run: python -m meteo.build ${{ inputs.dataset }} --year ${{ matrix.year }} --month ${{ matrix.month }} ${{ matrix.days }} ${{ inputs.extra }} --out out
+      - name: check (content + ERA5; a FAIL blocks the upload)
+        run: python -m meteo.check out/*.nc --max-compare 1 --json check.json
       - name: upload
         env: {GH_TOKEN: '${{ github.token }}'}
         run: python -m meteo.publish --repo ${{ github.repository }} out/*
