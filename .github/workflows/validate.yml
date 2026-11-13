@@ -1,0 +1,87 @@
+# VALIDATION of the download pipelines, to run before any bulk "build" over a long period.
+#  * probe:  availability scan of each source over its whole period (cheap HEAD/LIST requests):
+#            months complete / partial / missing, file layouts -> which months to build.
+#  * build:  one realistic unit per case (a full month), timed, NOT published, followed by
+#            meteo.check (dims, inits, leads, members, NaN, ranges, comparison with ERA5).
+# Reports (probe.json, check.json, sizes) are uploaded as workflow artifacts.
+name: validate
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: 'JSON list of build cases [{"ds":..,"y":..,"m":..,"x":"extra args"}]; [] = probe only'
+        default: >-
+          [{"ds":"gefs_reforecast","y":2010,"m":3,"x":""},
+           {"ds":"gefs_oper","y":2024,"m":3,"x":""},
+           {"ds":"gefs_ctl","y":2024,"m":3,"x":""},
+           {"ds":"gfs_wave","y":2024,"m":3,"x":""},
+           {"ds":"ecmwf_open","y":2025,"m":3,"x":"--products oper"},
+           {"ds":"ecmwf_open","y":2025,"m":3,"x":"--products aifs"},
+           {"ds":"ecmwf_open","y":2025,"m":3,"x":"--products wave"},
+           {"ds":"ecmwf_open","y":2025,"m":3,"x":"--products enfo"},
+           {"ds":"ecmwf_open","y":2023,"m":6,"x":"--products oper"},
+           {"ds":"ecmwf_open","y":2023,"m":6,"x":"--products enfo --days 1 2 3"},
+           {"ds":"cmems_phy_forecast","y":2026,"m":11,"x":""}]
+      probe: {description: 'run the availability scans', default: 'true'}
+      code_ref: {description: 'branch / commit of circeo-meteo to use', default: 'main'}
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: inputs.probe == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {ds: ecmwf_open, a: '--products oper aifs wave enfo --start 2023-01-01 --end 2026-11-12'}
+          - {ds: gefs_oper, a: '--start 2023-01-01 --end 2025-12-31'}
+          - {ds: gefs_ctl, a: '--start 2023-01-01 --end 2025-12-31'}
+          - {ds: gfs_wave, a: '--start 2021-03-01 --end 2025-12-31'}
+          - {ds: gefs_reforecast, a: '--start 2000-01-01 --end 2019-12-31'}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - run: python -m meteo.probe ${{ matrix.ds }} ${{ matrix.a }} --json probe_${{ matrix.ds }}.json
+      - uses: actions/upload-artifact@v4
+        with: {name: 'probe_${{ matrix.ds }}', path: 'probe_*.json'}
+  build:
+    if: inputs.cases != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        c: ${{ fromJSON(inputs.cases) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: build (timed, not published)
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: |
+          rc=0
+          /usr/bin/time -v python -m meteo.build ${{ matrix.c.ds }} --year ${{ matrix.c.y }} --month ${{ matrix.c.m }} ${{ matrix.c.x }} --out out 2> time.txt || rc=$?
+          grep -E "Elapsed|Maximum resident" time.txt || true
+          grep -v -E '^\s' time.txt | tail -30
+          exit $rc
+      - name: check
+        run: |
+          ls -la out
+          python -m meteo.check out/*.nc --json check.json
+      - name: report name
+        if: always()
+        id: n
+        run: echo "n=check_${{ matrix.c.ds }}_${{ matrix.c.y }}${{ matrix.c.m }}_$(echo '${{ matrix.c.x }}' | tr -cd 'a-z')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: '${{ steps.n.outputs.n }}', path: 'check.json', if-no-files-found: ignore}
