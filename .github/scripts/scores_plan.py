@@ -54,6 +54,8 @@ for rx, pfx, kind in PRODUCTS:
             if m:
                 last[m.group(1)] = max(last.get(m.group(1), ""), a["updated_at"])
         for ym, t in last.items():
+            if ym > os.environ.get("TRUTH_LAST", "202512"):  # no ERA5 truth in circeo-meteo yet
+                continue
             s = done.get(f"scores_{pfx}_{ym}.nc")
             if s is None or s < t or s < os.environ.get("FORCE_BEFORE", ""):
                 todo.append({"release": tag, "prefix": pfx, "kind": kind,
