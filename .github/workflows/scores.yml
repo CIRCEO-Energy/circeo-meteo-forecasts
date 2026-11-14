@@ -1,0 +1,55 @@
+# Forecast-vs-ERA5 scores from the ARCHIVED forecast files (meteo/scores.py in circeo-meteo):
+# no download from the forecast sources, only Release assets of this repo and of circeo-meteo.
+# One job per (product, month); results in Release scores-v1 (scores_<stem>_<YYYYMM>.nc).
+name: scores
+on:
+  workflow_dispatch:
+    inputs:
+      release: {description: 'forecast release, {year} allowed (e.g. ecmwf-enfo-uv10-0p5-{year})', required: true}
+      prefix: {description: 'file-name prefix of the product (e.g. ecmwf_enfo_uv10_0p5)', required: true}
+      kind: {description: 'wind | waves', default: 'wind'}
+      years: {description: 'JSON list of years', required: true}
+      months: {description: 'JSON list of months', default: '[1,2,3,4,5,6,7,8,9,10,11,12]'}
+      max_parallel: {description: 'max concurrent jobs', default: '8'}
+      code_ref: {description: 'branch / commit of circeo-meteo', default: 'main'}
+permissions:
+  contents: write
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs: {matrix: '${{ steps.m.outputs.matrix }}'}
+    steps:
+      - id: m
+        run: python3 -c "import json;y=json.loads('${{ inputs.years }}');m=json.loads('${{ inputs.months }}');print('matrix='+json.dumps({'include':[{'year':a,'month':b} for a in y for b in m]}))" >> "$GITHUB_OUTPUT"
+  score:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy: {fail-fast: false, max-parallel: '${{ fromJSON(inputs.max_parallel) }}', matrix: '${{ fromJSON(needs.plan.outputs.matrix) }}'}
+    env: {GH_TOKEN: '${{ github.token }}'}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: fetch forecasts, ERA5 (month + next), ocean mask
+        id: f
+        run: |
+          Y=${{ matrix.year }}; M=$(printf %02d ${{ matrix.month }})
+          N=$(date -d "$Y-$M-01 +1 month" +%Y%m)
+          REL=$(echo '${{ inputs.release }}' | sed "s/{year}/$Y/")
+          python client/fetch_meteo.py --repo ${{ github.repository }} --release $REL --pattern "${{ inputs.prefix }}_$Y$M*.nc" --dest fc || true
+          if ! ls fc/*/*.nc >/dev/null 2>&1; then echo "no forecast file for $Y-$M"; echo "skip=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ '${{ inputs.kind }}' = wind ]; then T=era5-uv10-0p25-v2; P=era5_uv10_0p25; else T=era5-waves-0p5-v2; P=era5_waves_0p5; fi
+          for ym in $Y$M $N; do python client/fetch_meteo.py --repo boris-circeo/circeo-meteo --release $T --pattern "${P}_$ym.nc" --dest era5 || true; done
+          python client/fetch_meteo.py --repo boris-circeo/circeo-meteo --release era5-sst-0p25-v2 --pattern "era5_sst_0p25_$Y.nc" --dest sst
+          echo "ym=$Y$M" >> "$GITHUB_OUTPUT"
+      - name: scores
+        if: steps.f.outputs.skip != '1'
+        run: python -m meteo.scores --files fc/*/*.nc --era5 era5 --mask $(ls sst/*/*.nc) --out scores --name ${{ inputs.prefix }}_${{ steps.f.outputs.ym }}
+      - name: upload
+        if: steps.f.outputs.skip != '1'
+        run: |
+          gh release view scores-v1 -R ${{ github.repository }} >/dev/null 2>&1 || gh release create scores-v1 -R ${{ github.repository }} --title scores-v1 --notes "Monthly forecast-vs-ERA5 scores computed from the archived forecasts (meteo/scores.py in boris-circeo/circeo-meteo)."
+          gh release upload scores-v1 scores/*.nc -R ${{ github.repository }} --clobber
