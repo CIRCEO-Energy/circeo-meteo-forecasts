@@ -55,7 +55,7 @@ for rx, pfx, kind in PRODUCTS:
                 last[m.group(1)] = max(last.get(m.group(1), ""), a["updated_at"])
         for ym, t in last.items():
             s = done.get(f"scores_{pfx}_{ym}.nc")
-            if s is None or s < t:
+            if s is None or s < t or s < os.environ.get("FORCE_BEFORE", ""):
                 todo.append({"release": tag, "prefix": pfx, "kind": kind,
                              "year": int(ym[:4]), "month": int(ym[4:])})
 todo.sort(key=lambda x: (x["year"], x["month"], x["prefix"]))

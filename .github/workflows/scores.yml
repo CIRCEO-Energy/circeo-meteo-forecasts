@@ -9,6 +9,7 @@ on:
     inputs:
       max_parallel: {description: 'max concurrent jobs', default: '6'}
       code_ref: {description: 'branch / commit of circeo-meteo', default: 'main'}
+      force_before: {description: 'rescore every score file older than this ISO time (scorer changes)', default: '2026-11-14T10:00:00Z'}
 permissions:
   contents: write
 concurrency: {group: scores, cancel-in-progress: false}
@@ -16,7 +17,7 @@ jobs:
   plan:
     runs-on: ubuntu-latest
     outputs: {matrix: '${{ steps.m.outputs.matrix }}', n: '${{ steps.m.outputs.n }}'}
-    env: {GH_TOKEN: '${{ github.token }}'}
+    env: {GH_TOKEN: '${{ github.token }}', FORCE_BEFORE: "${{ inputs.force_before || '2026-11-14T10:00:00Z' }}"}
     steps:
       - uses: actions/checkout@v4
       - id: m
@@ -26,7 +27,7 @@ jobs:
     if: needs.plan.outputs.n != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    strategy: {fail-fast: false, max-parallel: 6, matrix: '${{ fromJSON(needs.plan.outputs.matrix) }}'}
+    strategy: {fail-fast: false, max-parallel: 8, matrix: '${{ fromJSON(needs.plan.outputs.matrix) }}'}
     env: {GH_TOKEN: '${{ github.token }}'}
     steps:
       - uses: actions/checkout@v4
