@@ -58,6 +58,8 @@ for rx, pfx, kind in PRODUCTS:
             if s is None or s < t or s < os.environ.get("FORCE_BEFORE", ""):
                 todo.append({"release": tag, "prefix": pfx, "kind": kind,
                              "year": int(ym[:4]), "month": int(ym[4:])})
-todo.sort(key=lambda x: (x["year"], x["month"], x["prefix"]))
+# operational products (2023+) first, newest data first; the long reforecast last
+todo.sort(key=lambda x: (x["prefix"].startswith("gefs_reforecast"), -x["year"], -x["month"],
+                         x["prefix"]))
 print(f"{len(todo)} (product, month) to score", file=sys.stderr)
 print("matrix=" + json.dumps({"include": todo[:250]}) + "\nn=" + str(len(todo)))
