@@ -1,0 +1,35 @@
+# Backup mirror of every Release asset to Google Drive (meteo/mirror_gdrive.py, rclone).
+# Needs the repository secret RCLONE_CONF: the content of an rclone.conf holding a remote named
+# "gdrive" (type drive, scope drive.file) authorised by the Drive owner. Incremental, daily.
+name: mirror-gdrive
+on:
+  schedule: [{cron: '13 2 * * *'}]
+  workflow_dispatch:
+    inputs:
+      release: {description: 'only this Release tag (empty = all)', default: ''}
+permissions:
+  contents: read
+concurrency: {group: mirror-gdrive, cancel-in-progress: false}
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+      RCLONE_CONFIG: ${{ github.workspace }}/rclone.conf
+    steps:
+      - name: configured?
+        id: c
+        run: |
+          if [ -z "$RCLONE_CONF" ]; then echo "RCLONE_CONF secret missing, nothing to do"; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.c.outputs.skip != '1'
+        with: {repository: boris-circeo/circeo-meteo}
+      - if: steps.c.outputs.skip != '1'
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash >/dev/null
+          printf '%s\n' "$RCLONE_CONF" > "$RCLONE_CONFIG"
+          rclone about gdrive: || true
+      - if: steps.c.outputs.skip != '1'
+        run: python3 -m meteo.mirror_gdrive --github ${{ github.repository }} ${{ inputs.release && format('--release {0}', inputs.release) || '' }}
