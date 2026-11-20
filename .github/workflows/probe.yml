@@ -1,0 +1,30 @@
+# Availability probe (no download): S3 listing of ECMWF open-data prefixes and meteo.probe scans.
+name: probe
+on:
+  workflow_dispatch:
+    inputs:
+      prefixes: {description: 'space-separated S3 prefixes of ecmwf-forecasts (e.g. 20250801/00z/)', default: ''}
+      probe: {description: 'arguments of python -m meteo.probe (empty: skip)', default: ''}
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: S3 listings
+        if: ${{ inputs.prefixes != '' }}
+        run: |
+          for p in ${{ inputs.prefixes }}; do
+            echo "== $p"
+            curl -s "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/?list-type=2&prefix=$p&delimiter=/&max-keys=60" \
+              | grep -oE "<(Prefix|Key)>[^<]+" | sed 's/<[A-Za-z]*>//' | head -60
+          done
+      - name: meteo.probe
+        if: ${{ inputs.probe != '' }}
+        run: python -m meteo.probe ${{ inputs.probe }}
