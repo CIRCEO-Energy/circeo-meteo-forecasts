@@ -1,0 +1,34 @@
+# Real-time chain (code: boris-circeo/circeo-meteo, meteo/live.py): the latest ECMWF AIFS run as soon as it is
+# complete (00/06/12/18 UTC, ~5 h 20 after the run), u10/v10 0-240 h, archive box and grid, to the release
+# ecmwf-aifs-live with latest.json; the last 12 runs are kept. Optionally the latest AIFS-ENS run (00/12 UTC).
+name: live
+on:
+  schedule:
+    - cron: '47 5,11,17,23 * * *'
+  workflow_dispatch:
+    inputs:
+      ens: {description: 'also the latest AIFS-ENS run (50 members)', type: boolean, default: false}
+      max_step: {description: 'last lead (h)', default: '240'}
+permissions:
+  contents: write
+concurrency: {group: live, cancel-in-progress: false}
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env: {GH_TOKEN: '${{ github.token }}', REPO: '${{ github.repository }}', TAG: ecmwf-aifs-live}
+    steps:
+      - uses: actions/checkout@v4
+        with: {repository: boris-circeo/circeo-meteo}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12', cache: pip}
+      - run: pip install -r requirements.txt
+      - name: latest run
+        run: python -m meteo.live --out live --max-step ${{ inputs.max_step || '240' }} ${{ inputs.ens && '--ens' || '' }}
+      - name: publish and prune
+        run: |
+          gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 || gh release create "$TAG" -R "$REPO" --title "$TAG" \
+            --notes "Latest ECMWF AIFS (and AIFS-ENS) runs for real-time routing, ECMWF open data CC-BY-4.0. latest.json names the newest file. Rolling: the last 12 runs are kept."
+          gh release upload "$TAG" -R "$REPO" --clobber live/*.nc live/latest.json
+          gh api "repos/$REPO/releases/tags/$TAG" --jq '.assets[] | select(.name|endswith(".nc")) | [.created_at,.id,.name] | @tsv' \
+            | sort -r | awk 'NR>12 {print $2}' | while read id; do gh api -X DELETE "repos/$REPO/releases/assets/$id"; done
