@@ -1,10 +1,10 @@
 # Real-time chain (code: boris-circeo/circeo-meteo, meteo/live.py): the latest ECMWF AIFS run as soon as it is
-# complete (00/06/12/18 UTC, ~5 h 20 after the run), u10/v10 0-240 h, archive box and grid, to the release
+# complete (00/06/12/18 UTC; complete ~6 h after the run, checked at +6 h 25), u10/v10 0-240 h, archive box and grid, to the release
 # ecmwf-aifs-live with latest.json; the last 12 runs are kept. Optionally the latest AIFS-ENS run (00/12 UTC).
 name: live
 on:
   schedule:
-    - cron: '47 5,11,17,23 * * *'
+    - cron: '25 0,6,12,18 * * *'
   workflow_dispatch:
     inputs:
       ens: {description: 'also the latest AIFS-ENS run (50 members)', type: boolean, default: false}
