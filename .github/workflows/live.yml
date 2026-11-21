@@ -29,6 +29,7 @@ jobs:
         run: |
           gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 || gh release create "$TAG" -R "$REPO" --title "$TAG" \
             --notes "Latest ECMWF AIFS (and AIFS-ENS) runs for real-time routing, ECMWF open data CC-BY-4.0. latest.json names the newest file. Rolling: the last 12 runs are kept."
+          ls live/*.nc >/dev/null 2>&1 || { echo "no new run"; exit 0; }
           gh release upload "$TAG" -R "$REPO" --clobber live/*.nc live/latest.json
           gh api "repos/$REPO/releases/tags/$TAG" --jq '.assets[] | select(.name|endswith(".nc")) | [.created_at,.id,.name] | @tsv' \
             | sort -r | awk 'NR>12 {print $2}' | while read id; do gh api -X DELETE "repos/$REPO/releases/assets/$id"; done
