@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-REPO = os.environ.get("GITHUB_REPOSITORY", "boris-circeo/circeo-meteo-forecasts")
+REPO = os.environ.get("GITHUB_REPOSITORY", "CIRCEO-Energy/circeo-meteo-forecasts")
 PRODUCTS = [  # release regex, file prefix, kind
     (r"gefs-oper-uv10-0p5-\d{4}", "gefs_oper_uv10_0p5", "wind"),
     (r"gefs-ctl-uv10-0p25-v2", "gefs_ctl_uv10_0p25", "wind"),

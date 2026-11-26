@@ -31,7 +31,7 @@ jobs:
     env: {GH_TOKEN: '${{ github.token }}'}
     steps:
       - uses: actions/checkout@v4
-        with: {repository: boris-circeo/circeo-meteo, ref: "${{ inputs.code_ref || 'main' }}"}
+        with: {repository: CIRCEO-Energy/circeo-meteo, ref: "${{ inputs.code_ref || 'main' }}"}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt
@@ -41,11 +41,11 @@ jobs:
           N=$(date -d "$Y-$M-01 +1 month" +%Y%m)
           python client/fetch_meteo.py --repo ${{ github.repository }} --release ${{ matrix.release }} --pattern "${{ matrix.prefix }}_$Y$M*.nc" --dest fc
           if [ '${{ matrix.kind }}' = wind ]; then T=era5-uv10-0p25-v2; P=era5_uv10_0p25; else T=era5-waves-0p5-v2; P=era5_waves_0p5; fi
-          for ym in $Y$M $N; do python client/fetch_meteo.py --repo boris-circeo/circeo-meteo --release $T --pattern "${P}_$ym.nc" --dest era5 || true; done
-          python client/fetch_meteo.py --repo boris-circeo/circeo-meteo --release era5-sst-0p25-v2 --pattern "era5_sst_0p25_$Y.nc" --dest sst
+          for ym in $Y$M $N; do python client/fetch_meteo.py --repo CIRCEO-Energy/circeo-meteo --release $T --pattern "${P}_$ym.nc" --dest era5 || true; done
+          python client/fetch_meteo.py --repo CIRCEO-Energy/circeo-meteo --release era5-sst-0p25-v2 --pattern "era5_sst_0p25_$Y.nc" --dest sst
           echo "YM=$Y$M" >> "$GITHUB_ENV"
       - run: python -m meteo.scores --files fc/*/*.nc --era5 era5 --mask $(ls sst/*/*.nc) --out scores --name ${{ matrix.prefix }}_$YM
       - name: upload
         run: |
-          gh release view scores-v1 -R ${{ github.repository }} >/dev/null 2>&1 || gh release create scores-v1 -R ${{ github.repository }} --title scores-v1 --notes "Monthly forecast-vs-ERA5 scores computed from the archived forecasts (meteo/scores.py in boris-circeo/circeo-meteo)."
+          gh release view scores-v1 -R ${{ github.repository }} >/dev/null 2>&1 || gh release create scores-v1 -R ${{ github.repository }} --title scores-v1 --notes "Monthly forecast-vs-ERA5 scores computed from the archived forecasts (meteo/scores.py in CIRCEO-Energy/circeo-meteo)."
           gh release upload scores-v1 scores/*.nc -R ${{ github.repository }} --clobber

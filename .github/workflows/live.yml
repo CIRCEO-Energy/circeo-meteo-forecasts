@@ -1,4 +1,4 @@
-# Real-time chain (code: boris-circeo/circeo-meteo, meteo/live.py): the latest ECMWF AIFS run as soon as it is
+# Real-time chain (code: CIRCEO-Energy/circeo-meteo, meteo/live.py): the latest ECMWF AIFS run as soon as it is
 # complete (00/06/12/18 UTC; complete ~6 h after the run, checked at +6 h 25), u10/v10 0-240 h, archive box and grid, to the release
 # ecmwf-aifs-live with latest.json; the last 12 runs are kept. Optionally the latest AIFS-ENS run (00/12 UTC).
 name: live
@@ -19,7 +19,7 @@ jobs:
     env: {GH_TOKEN: '${{ github.token }}', REPO: '${{ github.repository }}', TAG: ecmwf-aifs-live}
     steps:
       - uses: actions/checkout@v4
-        with: {repository: boris-circeo/circeo-meteo}
+        with: {repository: CIRCEO-Energy/circeo-meteo}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt

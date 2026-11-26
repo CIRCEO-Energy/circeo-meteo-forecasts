@@ -42,7 +42,7 @@ jobs:
           - {ds: gefs_reforecast, a: '--start 2000-01-01 --end 2019-12-31'}
     steps:
       - uses: actions/checkout@v4
-        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+        with: {repository: CIRCEO-Energy/circeo-meteo, ref: '${{ inputs.code_ref }}'}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt
@@ -60,7 +60,7 @@ jobs:
         c: ${{ fromJSON(inputs.cases) }}
     steps:
       - uses: actions/checkout@v4
-        with: {repository: boris-circeo/circeo-meteo, ref: '${{ inputs.code_ref }}'}
+        with: {repository: CIRCEO-Energy/circeo-meteo, ref: '${{ inputs.code_ref }}'}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt

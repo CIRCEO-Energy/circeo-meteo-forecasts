@@ -1,4 +1,4 @@
-# Daily prospective archive (code: boris-circeo/circeo-meteo). Re-checks the last 3 days and adds
+# Daily prospective archive (code: CIRCEO-Energy/circeo-meteo). Re-checks the last 3 days and adds
 # what is missing: ECMWF HRES / AIFS / WAM waves and GEFS control (monthly files, merged), ECMWF ENS
 # and GEFS ensemble (one file per day), GFS-Wave (monthly); plus, if the Copernicus Marine secrets
 # are set, today's 10-day hourly ocean forecast (currents, temperature).
@@ -19,7 +19,7 @@ jobs:
     env: {GH_TOKEN: '${{ github.token }}', REPO: '${{ github.repository }}'}
     steps:
       - uses: actions/checkout@v4
-        with: {repository: boris-circeo/circeo-meteo}
+        with: {repository: CIRCEO-Energy/circeo-meteo}
       - uses: actions/setup-python@v5
         with: {python-version: '3.12', cache: pip}
       - run: pip install -r requirements.txt
